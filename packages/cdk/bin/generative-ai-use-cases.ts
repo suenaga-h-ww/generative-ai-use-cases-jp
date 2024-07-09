@@ -6,6 +6,7 @@ import { GenerativeAiUseCasesStack } from '../lib/generative-ai-use-cases-stack'
 import { CloudFrontWafStack } from '../lib/cloud-front-waf-stack';
 import { DashboardStack } from '../lib/dashboard-stack';
 import { SearchAgentStack } from '../lib/search-agent-stack';
+import { KnowledgeBaseAgentStack } from '../lib/knowledgebase';
 
 class DeletionPolicySetter implements cdk.IAspect {
   constructor(private readonly policy: cdk.RemovalPolicy) {}
@@ -118,6 +119,21 @@ const searchAgentStack = searchAgentEnabled
       crossRegionReferences: true,
     })
   : null;
+
+// Knowledge Base
+const knowledgeBaseEnabled =
+  app.node.tryGetContext('knowledgeBaseEnabled') || false;
+  const knowledgeBaseRegion = app.node.tryGetContext('agentRegion') || 'us-east-1';
+  const knowledgeBaseAgentStack = knowledgeBaseEnabled
+    ? new KnowledgeBaseAgentStack(app, 'WebKnowledgeBaseStack', {
+        env: {
+          account: process.env.CDK_DEFAULT_ACCOUNT,
+          region: knowledgeBaseRegion,
+        },
+        crossRegionReferences: true,
+      })
+    : null;
+
 
 // GenU Stack
 

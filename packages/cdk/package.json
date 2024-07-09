@@ -31,6 +31,7 @@
     "@aws-sdk/lib-dynamodb": "^3.549.0",
     "@aws-sdk/s3-request-presigner": "^3.549.0",
     "@aws-solutions-constructs/aws-cloudfront-s3": "^2.54.1",
+    "@cdklabs/generative-ai-cdk-constructs": "^0.1.120",
     "aws-cdk-lib": "2.139.0",
     "constructs": "^10.3.0",
     "deploy-time-build": "^0.3.17",

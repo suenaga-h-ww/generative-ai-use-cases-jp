@@ -15,6 +15,7 @@ import { CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Agent } from 'generative-ai-use-cases-jp';
+import { KnowledgeBaseAgentStack } from './knowledgebase';
 
 const errorMessageForBooleanContext = (key: string) => {
   return `${key} の設定でエラーになりました。原因として考えられるものは以下です。
@@ -65,6 +66,7 @@ export class GenerativeAiUseCasesStack extends Stack {
     const recognizeFileEnabled: boolean = this.node.tryGetContext(
       'recognizeFileEnabled'
     )!;
+    const knowledgeBaseEnabled: boolean = this.node.tryGetContext('knowledgeBaseEnabled')!;
 
     if (typeof ragEnabled !== 'boolean') {
       throw new Error(errorMessageForBooleanContext('ragEnabled'));
@@ -80,6 +82,10 @@ export class GenerativeAiUseCasesStack extends Stack {
 
     if (typeof recognizeFileEnabled !== 'boolean') {
       throw new Error(errorMessageForBooleanContext('recognizeFileEnabled'));
+    }
+
+    if (typeof knowledgeBaseEnabled !== 'boolean') {
+      throw new Error(errorMessageForBooleanContext('knowledgeBaseEnabled'));
     }
 
     const auth = new Auth(this, 'Auth', {
