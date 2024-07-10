@@ -35,11 +35,20 @@ export class KnowledgeBaseAgentStack extends Stack {
         
         // ApiKeyの取得
         const vectorStoreSecret = aws_secretsmanager.Secret.fromSecretAttributes(this, "vectorstore_secret", {
-            secretCompleteArn: `arn:aws:secretsmanager:${Stack.of(this).region}:${Stack.of(this).account}:secret:pinecone-kb`,
+            secretCompleteArn: `arn:aws:secretsmanager:${Stack.of(this).region}:${Stack.of(this).account}:secret:pinecone-kb-test-hclZGp`,
         });
+
+        // secretFullArnがundefinedでないことを確認
+        if (!vectorStoreSecret.secretFullArn) {
+            throw new Error("Secret ARN is undefined");
+        }
+
         const pineconeVectorStore = new pinecone.PineconeVectorStore({
-            connectionString: `https://your-index-1234567.svc.gcp-starter.pinecone.io`,
-            credentialsSecretArn: vectorStoreSecret.secretArn,
+            connectionString: "https://pinecone-kb-test-index-h7u1t19.svc.aped-4627-b74a.pinecone.io",
+            credentialsSecretArn: vectorStoreSecret.secretFullArn,
+            kmsKey: "aws/secretsmanager",
+            textField: 'question',
+            metadataField: 'metadata',
         });
 
 
