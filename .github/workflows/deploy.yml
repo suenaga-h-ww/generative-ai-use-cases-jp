@@ -31,8 +31,8 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4.0.2
       with:
-        role-to-assume: arn:aws:iam::1234567890:role/example-role
-        role-session-name: ${{ env.ROLE_TO_ASSUME }}
+        role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+        role-session-name: 'cdk-deployment'
         aws-region: ${{ env.AWS_REGION }}
         
     - name: Deploy with CDK
