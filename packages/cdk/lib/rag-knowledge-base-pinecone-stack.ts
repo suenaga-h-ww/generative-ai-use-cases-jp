@@ -59,7 +59,7 @@ export class RagKnowledgeBasePineconeStack extends Stack {
     const metadataField = props.metadataField ?? 'metadata';
 
     // PineconeのApiキーを取得する
-    const vectorStoreSecretsConstruct = new VectorStoreSecretsConstruct(this, 'VectorStoreSecretsConstruct',{})
+    const vectorStoreSecretsConstruct = new VectorStoreSecretsConstruct(this, 'VectorStoreSecretsConstruct')
     const vectorStoreUrl = vectorStoreSecretsConstruct.vectorStoreUrl;
     const vectorStoreSecret = vectorStoreSecretsConstruct.vectorStoreSecret
     if (!vectorStoreSecret.secretFullArn) {
