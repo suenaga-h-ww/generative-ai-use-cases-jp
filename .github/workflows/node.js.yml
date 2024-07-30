@@ -13,16 +13,18 @@ on:
 permissions:
   id-token: write # This is required for requesting the JWT
   contents: read # This is required for actions/checkout
-env:
-  PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-  PINECONE_URL: ${{ secrets.PINECONE_URL }}
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
+
 jobs:
   check-lint-build:
     name: 'Check lint and build'
     runs-on: ubuntu-latest
-
+    environment:
+      name: dev
+    env:
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      PINECONE_URL: ${{ secrets.PINECONE_URL }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }} 
     strategy:
       matrix:
         node-version: [18.x]
