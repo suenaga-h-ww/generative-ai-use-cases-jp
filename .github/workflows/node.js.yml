@@ -10,7 +10,14 @@ on:
   pull_request:
     branches: ['main']
     paths-ignore: ['browser-extension/**']
-
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read # This is required for actions/checkout
+env:
+  PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+  PINECONE_URL: ${{ secrets.PINECONE_URL }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
 jobs:
   check-lint-build:
     name: 'Check lint and build'
@@ -37,3 +44,11 @@ jobs:
           cat ./packages/cdk/cdk.json | jq '.context.openAiApiKeySecretArn |= "arn:aws:secretsmanager:us-west-2:123456789012:secret:openai-secret-XXXXXX"' > ./packages/cdk/temp.json
           mv ./packages/cdk/temp.json ./packages/cdk/cdk.json
       - run: npm -w packages/cdk run cdk synth
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: 'cdk-deployment'
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy with CDK
+        run: npm run cdk:deploy:auto
