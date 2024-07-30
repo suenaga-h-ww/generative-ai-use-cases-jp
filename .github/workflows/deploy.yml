@@ -9,14 +9,15 @@ env:
   PINECONE_URL : ${{ secrets.PINECONE_URL }}
   AWS_REGION : ${{ secrets.AWS_REGION }}
   ROLE_TO_ASSUME: ${{ secrets.ROLE_TO_ASSUME }}
-# permission can be added at job level or workflow level
+
 permissions:
   id-token: write   # This is required for requesting the JWT
   contents: read    # This is required for actions/checkout
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+    environment:
+        name: dev
     steps:
     - uses: actions/checkout@v3
     
