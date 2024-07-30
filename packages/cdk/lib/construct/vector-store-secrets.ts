@@ -2,14 +2,12 @@ import { SecretValue } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
-
-export interface VectorStoreSecretsProps {}
   
 export class VectorStoreSecretsConstruct extends Construct {
     public readonly vectorStoreUrl: StringParameter;
     public readonly vectorStoreSecret: Secret;
 
-    constructor(scope: Construct, id: string, props: VectorStoreSecretsProps) {
+    constructor(scope: Construct, id: string) {
         super(scope, id);
 
 
@@ -17,7 +15,7 @@ export class VectorStoreSecretsConstruct extends Construct {
         const pineconeUrl = process.env.PINECONE_URL; // https://pinecone-kb-test-index-h7u1t19.svc.aped-4627-b74a.pinecone.io
         if (!pineconeUrl) {
             throw new Error("process.env.PINECONE_URL is undefined");
-        };
+        }
         const vectorStoreUrl = new StringParameter(
             this,
             "vector-store-url",
@@ -32,7 +30,7 @@ export class VectorStoreSecretsConstruct extends Construct {
         const pineconeApiKey = process.env.PINECONE_API_KEY
         if (!pineconeApiKey) {
             throw new Error("process.env.PINECONE_API_KEY is undefined");
-        };
+        }
         const vectorStoreSecret = new Secret(
             this,
             "pinecone-api-key",
@@ -48,7 +46,7 @@ export class VectorStoreSecretsConstruct extends Construct {
         // secretFullArnがundefinedでないことを確認
         if (!vectorStoreSecret.secretFullArn) {
             throw new Error("Secret ARN is undefined");
-        };
+        }
 
 
         this.vectorStoreUrl = vectorStoreUrl;

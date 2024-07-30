@@ -7,7 +7,6 @@ import * as s3Deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import {MetadataJsonGeneratorConstruct, CopyObjectConstruct, VectorStoreSecretsConstruct} from './construct';
 
-const UUID = '339C5FED-A1B5-43B6-B40A-5E8E59E5734D';
 
 // 以下が現状 Embedding model としてサポートされているモデル ID
 // Dimension は最終的に Custom resource の props として渡すが
@@ -56,12 +55,8 @@ export class RagKnowledgeBasePineconeStack extends Stack {
     }
 
     const collectionName = props.collectionName ?? 'generative-ai-use-cases-jp';
-    const vectorIndexName =
-      props.vectorIndexName ?? 'bedrock-knowledge-base-default';
-    const vectorField =
-      props.vectorField ?? 'bedrock-knowledge-base-default-vector';
-    const textField = props.textField ?? 'AMAZON_BEDROCK_TEXT_CHUNK';
-    const metadataField = props.metadataField ?? 'AMAZON_BEDROCK_METADATA';
+    const textField = props.textField ?? 'text';
+    const metadataField = props.metadataField ?? 'metadata';
 
     // PineconeのApiキーを取得する
     const vectorStoreSecretsConstruct = new VectorStoreSecretsConstruct(this, 'VectorStoreSecretsConstruct',{})
@@ -69,7 +64,7 @@ export class RagKnowledgeBasePineconeStack extends Stack {
     const vectorStoreSecret = vectorStoreSecretsConstruct.vectorStoreSecret
     if (!vectorStoreSecret.secretFullArn) {
       throw new Error("Secret ARN is undefined");
-    };
+    }
     // インラインポリシーでシークレットを取得する
     const knowledgeBaseRole = new iam.Role(this, 'KnowledgeBaseRole', {
       assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
@@ -140,8 +135,8 @@ export class RagKnowledgeBasePineconeStack extends Stack {
           connectionString: vectorStoreUrl.stringValue, // Pineconeの接続文字列を設定
           credentialsSecretArn: vectorStoreSecret.secretFullArn, // PineconeのAPIキーシークレットのARNを設定
           fieldMapping: {
-            metadataField: "metadata", // メタデータフィールドを設定
-            textField: "text", // テキストフィールドを設定
+            metadataField: metadataField,
+            textField: textField,
           },
         },
       },
@@ -181,11 +176,11 @@ export class RagKnowledgeBasePineconeStack extends Stack {
       bedrock.FoundationModelIdentifier.ANTHROPIC_CLAUDE_3_SONNET_20240229_V1_0,
     );
     
-    const metadataJsonGeneratorConstruct = new MetadataJsonGeneratorConstruct(this, 'metadataJsonGeneratorConstruct', {
+    new MetadataJsonGeneratorConstruct(this, 'metadataJsonGeneratorConstruct', {
       model: model,
       sourceBucket: rawTextFileBucket,
-    });
-    const copyObjectConstruct = new CopyObjectConstruct(this, "copyObjectConstruct", {
+    })
+    new CopyObjectConstruct(this, "copyObjectConstruct", {
       knowledgeBaseId: knowledgeBase.ref,
       sourceBucket: rawTextFileBucket
     })

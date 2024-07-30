@@ -13,6 +13,7 @@ import { Construct } from 'constructs';
 
 export class MetadataJsonGeneratorConstruct extends Construct {
     public readonly metadataJsonGenerator: sfn.StateMachine;
+    public readonly pipes: pipes.CfnPipe;
   
     constructor(scope: Construct, id: string, props: {
       model: bedrock.FoundationModel;
@@ -180,7 +181,7 @@ export class MetadataJsonGeneratorConstruct extends Construct {
 
     const definition = mapState;
 
-    this.metadataJsonGenerator = new sfn.StateMachine(this, 'MetadataGeneratorStateMachine', {
+    const MetadataJsonGenerator = new sfn.StateMachine(this, 'MetadataGeneratorStateMachine', {
       definition,
       role: stepFunctionsRole,
     });  
@@ -213,7 +214,7 @@ export class MetadataJsonGeneratorConstruct extends Construct {
         statements: [
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
-            resources: [this.metadataJsonGenerator.stateMachineArn],
+            resources: [MetadataJsonGenerator.stateMachineArn],
             actions: ['states:StartExecution'],
           }),
           new iam.PolicyStatement({
@@ -229,7 +230,7 @@ export class MetadataJsonGeneratorConstruct extends Construct {
     const Pipes = new pipes.CfnPipe(this, 'Pipes', {
       roleArn: pipesRole.roleArn,
       source: SqsQueue.queueArn,
-      target: this.metadataJsonGenerator.stateMachineArn,
+      target: MetadataJsonGenerator.stateMachineArn,
       sourceParameters: {
         sqsQueueParameters: {
           batchSize: 10,
@@ -243,6 +244,9 @@ export class MetadataJsonGeneratorConstruct extends Construct {
         inputTemplate: '{"detail": <$.body.detail>}'
       }
     });
+
+    this.pipes = Pipes;
+    this.metadataJsonGenerator = MetadataJsonGenerator
   }
 }
   
@@ -341,7 +345,7 @@ export class CopyObjectConstruct extends Construct {
       );
   
       // express mode
-      this.copyRawObjectAndMetadataSfn = new sfn.StateMachine(this, 'CopyRawObjectAndMetadataStateMachine', {
+      const CopyRawObjectAndMetadataSfn = new sfn.StateMachine(this, 'CopyRawObjectAndMetadataStateMachine', {
         definition: listDataSources
           .next(getDataSource)
           .next(parallelExecution),
@@ -363,7 +367,8 @@ export class CopyObjectConstruct extends Construct {
           }
         }
       });
-      createdMetadataJsonRule.addTarget(new targets.SfnStateMachine(this.copyRawObjectAndMetadataSfn));
+      createdMetadataJsonRule.addTarget(new targets.SfnStateMachine(CopyRawObjectAndMetadataSfn));
 
+      this.copyRawObjectAndMetadataSfn = CopyRawObjectAndMetadataSfn;
     }
   }
