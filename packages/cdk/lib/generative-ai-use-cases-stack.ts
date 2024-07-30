@@ -83,7 +83,9 @@ export class GenerativeAiUseCasesStack extends Stack {
     }
 
     if (typeof ragKnowledgeBasePineconeEnabled !== 'boolean') {
-      throw new Error(errorMessageForBooleanContext('ragKnowledgeBasePineconeEnabled'));
+      throw new Error(
+        errorMessageForBooleanContext('ragKnowledgeBasePineconeEnabled')
+      );
     }
 
     if (typeof selfSignUpEnabled !== 'boolean') {

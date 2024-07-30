@@ -113,7 +113,7 @@ const modelRegion: string = app.node.tryGetContext('modelRegion')!;
 const ragKnowledgeBaseEnabled =
   app.node.tryGetContext('ragKnowledgeBaseEnabled') || false;
 const ragKnowledgeBasePineconeEnabled =
-app.node.tryGetContext('ragKnowledgeBasePineconeEnabled') || false;
+  app.node.tryGetContext('ragKnowledgeBasePineconeEnabled') || false;
 const ragKnowledgeBaseStack = ragKnowledgeBaseEnabled
   ? new RagKnowledgeBaseStack(app, 'RagKnowledgeBaseStack', {
       env: {
@@ -121,17 +121,17 @@ const ragKnowledgeBaseStack = ragKnowledgeBaseEnabled
         region: modelRegion,
       },
       crossRegionReferences: true,
-    }):
-    // RAG Knowledge Base Pinecone
-    ragKnowledgeBasePineconeEnabled
-  ? new RagKnowledgeBasePineconeStack(app, 'RagKnowledgeBasePineconeStack', {
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: modelRegion,
-      },
-      crossRegionReferences: true,
     })
-  : null;
+  : // RAG Knowledge Base Pinecone
+    ragKnowledgeBasePineconeEnabled
+    ? new RagKnowledgeBasePineconeStack(app, 'RagKnowledgeBasePineconeStack', {
+        env: {
+          account: process.env.CDK_DEFAULT_ACCOUNT,
+          region: modelRegion,
+        },
+        crossRegionReferences: true,
+      })
+    : null;
 
 // Agent
 

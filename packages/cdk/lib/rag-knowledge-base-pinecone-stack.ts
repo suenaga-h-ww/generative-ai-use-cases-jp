@@ -5,8 +5,11 @@ import * as bedrock from 'aws-cdk-lib/aws-bedrock';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3Deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import {MetadataJsonGeneratorConstruct, CopyObjectConstruct, VectorStoreSecretsConstruct} from './construct';
-
+import {
+  MetadataJsonGeneratorConstruct,
+  CopyObjectConstruct,
+  VectorStoreSecretsConstruct,
+} from './construct';
 
 // 以下が現状 Embedding model としてサポートされているモデル ID
 // Dimension は最終的に Custom resource の props として渡すが
@@ -20,7 +23,6 @@ const MODEL_VECTOR_MAPPING: { [key: string]: string } = {
 };
 
 const EMBEDDING_MODELS = Object.keys(MODEL_VECTOR_MAPPING);
-
 
 interface RagKnowledgeBasePineconeStackProps extends StackProps {
   collectionName?: string;
@@ -36,7 +38,11 @@ export class RagKnowledgeBasePineconeStack extends Stack {
   public readonly registryName: string;
   public readonly schemaName: string;
 
-  constructor(scope: Construct, id: string, props: RagKnowledgeBasePineconeStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: RagKnowledgeBasePineconeStackProps
+  ) {
     super(scope, id, props);
 
     const embeddingModelId: string | null | undefined =
@@ -59,17 +65,20 @@ export class RagKnowledgeBasePineconeStack extends Stack {
     const metadataField = props.metadataField ?? 'metadata';
 
     // PineconeのApiキーを取得する
-    const vectorStoreSecretsConstruct = new VectorStoreSecretsConstruct(this, 'VectorStoreSecretsConstruct')
+    const vectorStoreSecretsConstruct = new VectorStoreSecretsConstruct(
+      this,
+      'VectorStoreSecretsConstruct'
+    );
     const vectorStoreUrl = vectorStoreSecretsConstruct.vectorStoreUrl;
-    const vectorStoreSecret = vectorStoreSecretsConstruct.vectorStoreSecret
+    const vectorStoreSecret = vectorStoreSecretsConstruct.vectorStoreSecret;
     if (!vectorStoreSecret.secretFullArn) {
-      throw new Error("Secret ARN is undefined");
+      throw new Error('Secret ARN is undefined');
     }
     // インラインポリシーでシークレットを取得する
     const knowledgeBaseRole = new iam.Role(this, 'KnowledgeBaseRole', {
       assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
       inlinePolicies: {
-        'AllowGetSecretValue': new iam.PolicyDocument({
+        AllowGetSecretValue: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -82,7 +91,6 @@ export class RagKnowledgeBasePineconeStack extends Stack {
     });
     vectorStoreUrl.grantRead(knowledgeBaseRole);
     vectorStoreSecret.grantRead(knowledgeBaseRole);
-
 
     const dataSourceBucket = new s3.Bucket(this, 'DataSourceBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -119,7 +127,7 @@ export class RagKnowledgeBasePineconeStack extends Stack {
         actions: ['s3:GetObject'],
       })
     );
-    
+
     const knowledgeBase = new bedrock.CfnKnowledgeBase(this, 'KnowledgeBase', {
       name: collectionName,
       roleArn: knowledgeBaseRole.roleArn,
@@ -130,7 +138,7 @@ export class RagKnowledgeBasePineconeStack extends Stack {
         },
       },
       storageConfiguration: {
-        type: "PINECONE", // ストレージのタイプをPineconeに設定
+        type: 'PINECONE', // ストレージのタイプをPineconeに設定
         pineconeConfiguration: {
           connectionString: vectorStoreUrl.stringValue, // Pineconeの接続文字列を設定
           credentialsSecretArn: vectorStoreSecret.secretFullArn, // PineconeのAPIキーシークレットのARNを設定
@@ -173,18 +181,18 @@ export class RagKnowledgeBasePineconeStack extends Stack {
     const model = bedrock.FoundationModel.fromFoundationModelId(
       this,
       'Model',
-      bedrock.FoundationModelIdentifier.ANTHROPIC_CLAUDE_3_SONNET_20240229_V1_0,
+      bedrock.FoundationModelIdentifier.ANTHROPIC_CLAUDE_3_SONNET_20240229_V1_0
     );
-    
+
     new MetadataJsonGeneratorConstruct(this, 'metadataJsonGeneratorConstruct', {
       model: model,
       sourceBucket: rawTextFileBucket,
-    })
-    new CopyObjectConstruct(this, "copyObjectConstruct", {
+    });
+    new CopyObjectConstruct(this, 'copyObjectConstruct', {
       knowledgeBaseId: knowledgeBase.ref,
-      sourceBucket: rawTextFileBucket
-    })
-    
+      sourceBucket: rawTextFileBucket,
+    });
+
     this.knowledgeBaseId = knowledgeBase.ref;
     this.dataSourceBucketName = dataSourceBucket.bucketName;
   }

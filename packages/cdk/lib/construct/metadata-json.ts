@@ -12,50 +12,51 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
 export class MetadataJsonGeneratorConstruct extends Construct {
-    public readonly metadataJsonGenerator: sfn.StateMachine;
-    public readonly pipes: pipes.CfnPipe;
-  
-    constructor(scope: Construct, id: string, props: {
+  public readonly metadataJsonGenerator: sfn.StateMachine;
+  public readonly pipes: pipes.CfnPipe;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
       model: bedrock.FoundationModel;
       sourceBucket: s3.Bucket;
-    }) {
-      super(scope, id);
-      const {
-        model,
-        sourceBucket,
-      } = props;
+    }
+  ) {
+    super(scope, id);
+    const { model, sourceBucket } = props;
 
     // Glue Schema Registry
     const registry = new glue.CfnRegistry(this, 'S3DataSourceSchemaRegistry', {
-        name: 'KnowledgeBase',
-        description: 'Registry for S3 data source metadata schemas',
-      });
+      name: 'KnowledgeBase',
+      description: 'Registry for S3 data source metadata schemas',
+    });
     const registryProperty: glue.CfnSchema.RegistryProperty = {
-      arn : registry.attrArn
+      arn: registry.attrArn,
     };
-  
+
     const metadataSchema = new glue.CfnSchema(this, 'MetadataJsonSchema', {
       name: 'metadataJson',
       registry: registryProperty,
       dataFormat: 'JSON',
       compatibility: 'NONE',
       schemaDefinition: JSON.stringify({
-        $schema: "http://json-schema.org/draft-07/schema#",
-        type: "object",
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
         properties: {
           metadataAttributes: {
-            type: "object",
-            description: "論文のメタデータ",
+            type: 'object',
+            description: '論文のメタデータ',
             properties: {
               keywords: {
-                type: "string",
-                description: "論文のキーワード"
-              }
-            }
-          }
+                type: 'string',
+                description: '論文のキーワード',
+              },
+            },
+          },
         },
-        required: ["metadataAttributes"]
-      })
+        required: ['metadataAttributes'],
+      }),
     });
     metadataSchema.addDependency(registry);
 
@@ -64,94 +65,119 @@ export class MetadataJsonGeneratorConstruct extends Construct {
       assumedBy: new iam.ServicePrincipal('states.amazonaws.com'),
     });
 
-    stepFunctionsRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'));
-    stepFunctionsRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSGlueConsoleFullAccess'));
-    stepFunctionsRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess'));
-  
+    stepFunctionsRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess')
+    );
+    stepFunctionsRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSGlueConsoleFullAccess')
+    );
+    stepFunctionsRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
+    );
+
     const ragApi = new tasks.CallAwsService(this, 'RAG API', {
       service: 'bedrockagentruntime',
       action: 'retrieveAndGenerate',
       parameters: {
         Input: {
-          'Text.$': "States.Format('Give me a summary of {} and list the keywords found on the first page in the abstract section.', $.detail.object.key)"
+          'Text.$':
+            "States.Format('Give me a summary of {} and list the keywords found on the first page in the abstract section.', $.detail.object.key)",
         },
         RetrieveAndGenerateConfiguration: {
           ExternalSourcesConfiguration: {
             ModelArn: model.modelArn,
-            Sources: [{
-              S3Location: {
-                'Uri.$': "States.Format('s3://{}/{}', $.detail.bucket.name, $.detail.object.key)"
+            Sources: [
+              {
+                S3Location: {
+                  'Uri.$':
+                    "States.Format('s3://{}/{}', $.detail.bucket.name, $.detail.object.key)",
+                },
+                SourceType: 'S3',
               },
-              SourceType: 'S3'
-            }]
+            ],
           },
-          Type: 'EXTERNAL_SOURCES'
-        }
+          Type: 'EXTERNAL_SOURCES',
+        },
       },
       iamResources: ['*'],
       resultSelector: {
-        Text: sfn.JsonPath.stringAt('$.Output.Text')
-        },
-      resultPath: '$.RetrieveAndGenerate'
-    });
-  
-    const getSchemaVersion = new tasks.CallAwsService(this, 'Get Schema Version', {
-      service: 'glue',
-      action: 'getSchemaVersion',
-      parameters: {
-        SchemaId: {
-          RegistryName: registry.name,
-          SchemaName: metadataSchema.name
-        },
-        SchemaVersionNumber: {
-          LatestVersion: true
-        }
+        Text: sfn.JsonPath.stringAt('$.Output.Text'),
       },
-      iamResources: ['*'],
-      resultSelector: {
-        'SchemaDefinition.$': 'States.StringToJson($.SchemaDefinition)',
-        'VersionNumber.$': '$.VersionNumber'
-      },
-      resultPath: '$.GetSchemaVersion'
+      resultPath: '$.RetrieveAndGenerate',
     });
+
+    const getSchemaVersion = new tasks.CallAwsService(
+      this,
+      'Get Schema Version',
+      {
+        service: 'glue',
+        action: 'getSchemaVersion',
+        parameters: {
+          SchemaId: {
+            RegistryName: registry.name,
+            SchemaName: metadataSchema.name,
+          },
+          SchemaVersionNumber: {
+            LatestVersion: true,
+          },
+        },
+        iamResources: ['*'],
+        resultSelector: {
+          'SchemaDefinition.$': 'States.StringToJson($.SchemaDefinition)',
+          'VersionNumber.$': '$.VersionNumber',
+        },
+        resultPath: '$.GetSchemaVersion',
+      }
+    );
 
     // pass state: wait 10 sec.
     const waitState = new sfn.Wait(this, 'Wait 10 Seconds', {
-      time: sfn.WaitTime.duration(cdk.Duration.seconds(10))
+      time: sfn.WaitTime.duration(cdk.Duration.seconds(10)),
     });
-  
+
     // Invoke Claude APIタスクの定義
-    const invokeClaudeApi = new tasks.BedrockInvokeModel(this, 'Invoke Claude API', {
-      model,
-      body: sfn.TaskInput.fromObject({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 1000,
-        temperature: 0,
-        tools: [{
-          name: 'print_paper_keywords',
-          description: '与えられた論文からキーワードを print out します。',
-          'input_schema.$': '$.GetSchemaVersion.SchemaDefinition'
-        }],
-        tool_choice: {
-          type: 'tool',
-          name: 'print_paper_keywords'
-        },
-        messages: [{
-          role: 'user',
-          content: [{
-            type: 'text',
-            'text.$': "States.Format('<text>{}</text> print_paper_keywords ツールのみを利用すること。', $.RetrieveAndGenerate.Text)"
-          }]
-        }]
-      }),
-      resultSelector: {
+    const invokeClaudeApi = new tasks.BedrockInvokeModel(
+      this,
+      'Invoke Claude API',
+      {
+        model,
+        body: sfn.TaskInput.fromObject({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 1000,
+          temperature: 0,
+          tools: [
+            {
+              name: 'print_paper_keywords',
+              description: '与えられた論文からキーワードを print out します。',
+              'input_schema.$': '$.GetSchemaVersion.SchemaDefinition',
+            },
+          ],
+          tool_choice: {
+            type: 'tool',
+            name: 'print_paper_keywords',
+          },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  'text.$':
+                    "States.Format('<text>{}</text> print_paper_keywords ツールのみを利用すること。', $.RetrieveAndGenerate.Text)",
+                },
+              ],
+            },
+          ],
+        }),
+        resultSelector: {
           toolUse: {
-            'input.$': "$.Body.content[?(@.type=='tool_use')].input"
-          }
-      },
-      resultPath: '$.BedrockInvokeModel'
-    });
-  
+            'input.$': "$.Body.content[?(@.type=='tool_use')].input",
+          },
+        },
+        resultPath: '$.BedrockInvokeModel',
+      }
+    );
+
     const uploadToS3 = new tasks.CallAwsService(this, 'Upload to S3', {
       service: 's3',
       action: 'putObject',
@@ -159,73 +185,83 @@ export class MetadataJsonGeneratorConstruct extends Construct {
         'Body.$': '$.BedrockInvokeModel.toolUse.input[0]',
         'Bucket.$': '$.detail.bucket.name',
         'Key.$': "States.Format('{}.metadata.json', $.detail.object.key)",
-        ContentType: 'application/json'
+        ContentType: 'application/json',
       },
-      iamResources: ['*']
+      iamResources: ['*'],
     });
-  
+
     const processSingleItem = ragApi
       .next(getSchemaVersion)
       .next(waitState)
       .next(invokeClaudeApi)
       .next(uploadToS3);
-  
+
     const mapState = new sfn.Map(this, 'Process Items', {
       itemsPath: '$',
       itemSelector: {
-        detail: sfn.JsonPath.stringAt('$$.Map.Item.Value.detail')
+        detail: sfn.JsonPath.stringAt('$$.Map.Item.Value.detail'),
       },
-      maxConcurrency: 1
+      maxConcurrency: 1,
     });
     mapState.itemProcessor(processSingleItem);
 
     const definition = mapState;
 
-    const MetadataJsonGenerator = new sfn.StateMachine(this, 'MetadataGeneratorStateMachine', {
-      definition,
-      role: stepFunctionsRole,
-    });  
+    const MetadataJsonGenerator = new sfn.StateMachine(
+      this,
+      'MetadataGeneratorStateMachine',
+      {
+        definition,
+        role: stepFunctionsRole,
+      }
+    );
 
-  // event bridge rule: target SQS
-  const SqsQueue = new sqs.Queue(this, 'ObjectCreatedQueue', {
-    queueName: 'ObjectCreatedQueue'
-  });
-  const rule = new events.Rule(this, 'DataSourceCreatedRule', {
+    // event bridge rule: target SQS
+    const SqsQueue = new sqs.Queue(this, 'ObjectCreatedQueue', {
+      queueName: 'ObjectCreatedQueue',
+    });
+    const rule = new events.Rule(this, 'DataSourceCreatedRule', {
       eventPattern: {
         source: ['aws.s3'],
         resources: [sourceBucket.bucketArn],
         detailType: ['Object Created'],
         detail: {
           object: {
-            key: [{
-              suffix: '.pdf'
-            }]
-          }
-        }
-      }
+            key: [
+              {
+                suffix: '.pdf',
+              },
+            ],
+          },
+        },
+      },
     });
-  rule.addTarget(new targets.SqsQueue(SqsQueue));
-  
-  // event bridge pipes: target metajsonGenerator step functions
-  const pipesRole = new iam.Role(this, 'PipesRole', {
-    assumedBy: new iam.ServicePrincipal('pipes.amazonaws.com'),
-    inlinePolicies: {
-      'AllowPutEvents': new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            resources: [MetadataJsonGenerator.stateMachineArn],
-            actions: ['states:StartExecution'],
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            resources: [SqsQueue.queueArn],
-            actions: ['sqs:ReceiveMessage', 'sqs:DeleteMessage', 'sqs:GetQueueAttributes'],
-          })
-        ]
-      })
-    }
-  });
+    rule.addTarget(new targets.SqsQueue(SqsQueue));
+
+    // event bridge pipes: target metajsonGenerator step functions
+    const pipesRole = new iam.Role(this, 'PipesRole', {
+      assumedBy: new iam.ServicePrincipal('pipes.amazonaws.com'),
+      inlinePolicies: {
+        AllowPutEvents: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              resources: [MetadataJsonGenerator.stateMachineArn],
+              actions: ['states:StartExecution'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              resources: [SqsQueue.queueArn],
+              actions: [
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+                'sqs:GetQueueAttributes',
+              ],
+            }),
+          ],
+        }),
+      },
+    });
 
     const Pipes = new pipes.CfnPipe(this, 'Pipes', {
       roleArn: pipesRole.roleArn,
@@ -234,141 +270,169 @@ export class MetadataJsonGeneratorConstruct extends Construct {
       sourceParameters: {
         sqsQueueParameters: {
           batchSize: 10,
-          maximumBatchingWindowInSeconds: 3
-        }
+          maximumBatchingWindowInSeconds: 3,
+        },
       },
       targetParameters: {
         stepFunctionStateMachineParameters: {
-          invocationType: 'FIRE_AND_FORGET'
+          invocationType: 'FIRE_AND_FORGET',
         },
-        inputTemplate: '{"detail": <$.body.detail>}'
-      }
+        inputTemplate: '{"detail": <$.body.detail>}',
+      },
     });
 
     this.pipes = Pipes;
-    this.metadataJsonGenerator = MetadataJsonGenerator
+    this.metadataJsonGenerator = MetadataJsonGenerator;
   }
 }
-  
+
 export class CopyObjectConstruct extends Construct {
   public readonly copyRawObjectAndMetadataSfn: sfn.StateMachine;
 
-  constructor(scope: Construct, id: string, props: {
-    knowledgeBaseId: string,
-    sourceBucket: s3.Bucket;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      knowledgeBaseId: string;
+      sourceBucket: s3.Bucket;
+    }
+  ) {
     super(scope, id);
-    const {
-      knowledgeBaseId,
-      sourceBucket,
-    } = props;
+    const { knowledgeBaseId, sourceBucket } = props;
 
-      // copyStepFunctionsRole
-      const copyStepFunctionsRole = new iam.Role(this, 'CopyStepFunctionsRole', {
-        assumedBy: new iam.ServicePrincipal('states.amazonaws.com'),
-      });
-      copyStepFunctionsRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'));
-      copyStepFunctionsRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess'));
-  
-      // Step Functions : Bedrock Agents: ListDataSources
-      const listDataSources = new tasks.CallAwsService(this, 'ListDataSources', {
-        service: 'bedrockagent',
-        action: 'listDataSources',
-        parameters: {
-          KnowledgeBaseId: knowledgeBaseId
+    // copyStepFunctionsRole
+    const copyStepFunctionsRole = new iam.Role(this, 'CopyStepFunctionsRole', {
+      assumedBy: new iam.ServicePrincipal('states.amazonaws.com'),
+    });
+    copyStepFunctionsRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess')
+    );
+    copyStepFunctionsRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
+    );
+
+    // Step Functions : Bedrock Agents: ListDataSources
+    const listDataSources = new tasks.CallAwsService(this, 'ListDataSources', {
+      service: 'bedrockagent',
+      action: 'listDataSources',
+      parameters: {
+        KnowledgeBaseId: knowledgeBaseId,
+      },
+      iamResources: ['*'],
+      resultSelector: {
+        ListDataSources: {
+          'DataSourceId.$': '$.DataSourceSummaries[0].DataSourceId',
+          'KnowledgeBaseId.$': '$.DataSourceSummaries[0].KnowledgeBaseId',
         },
-        iamResources: ['*'],
-        resultSelector: {
-          ListDataSources: {
-            'DataSourceId.$': '$.DataSourceSummaries[0].DataSourceId',
-            'KnowledgeBaseId.$': '$.DataSourceSummaries[0].KnowledgeBaseId'
-          }
+      },
+      outputPath: '$.ListDataSources',
+    });
+    // Step Functions : Bedrock Agents: GetDataSources
+    const getDataSource = new tasks.CallAwsService(this, 'GetDataSource', {
+      service: 'bedrockagent',
+      action: 'getDataSource',
+      parameters: {
+        'DataSourceId.$': '$.DataSourceId',
+        'KnowledgeBaseId.$': '$.KnowledgeBaseId',
+      },
+      iamResources: ['*'],
+      resultSelector: {
+        GetDataSource: {
+          'BucketArn.$':
+            '$.DataSource.DataSourceConfiguration.S3Configuration.BucketArn',
+          'InclusionPrefixes.$':
+            '$.DataSource.DataSourceConfiguration.S3Configuration.InclusionPrefixes',
         },
-        outputPath: '$.ListDataSources'
-      });
-      // Step Functions : Bedrock Agents: GetDataSources
-      const getDataSource = new tasks.CallAwsService(this, 'GetDataSource', {
-        service: 'bedrockagent',
-        action: 'getDataSource',
-        parameters: {
-          'DataSourceId.$': '$.DataSourceId',
-          'KnowledgeBaseId.$': '$.KnowledgeBaseId'
-        },
-        iamResources: ['*'],
-        resultSelector: {
-          GetDataSource: {
-          'BucketArn.$': '$.DataSource.DataSourceConfiguration.S3Configuration.BucketArn',
-          'InclusionPrefixes.$': '$.DataSource.DataSourceConfiguration.S3Configuration.InclusionPrefixes'
-          }
-        },
-        outputPath: '$.GetDataSource'
-      });
-  
-      // 並行処理の定義
-      const parallelExecution = new sfn.Parallel(this, 'ParallelExecution');
-  
-      // Step Functions : copy raw PDF to S3DataSource Bucket
-      const getObjectKeyFromInput = new sfn.Pass(this, 'GetObjectKeyFromInput', {
-        parameters: {
-          'RawObjectKey.$': "States.StringSplit($$.Execution.Input.detail.object.key, '.')"
-        },
-        resultPath: '$.getObjectKeyFromInput'
-      });
-      const copyRawObject = new tasks.CallAwsService(this, 'CopyRawObject', {
+      },
+      outputPath: '$.GetDataSource',
+    });
+
+    // 並行処理の定義
+    const parallelExecution = new sfn.Parallel(this, 'ParallelExecution');
+
+    // Step Functions : copy raw PDF to S3DataSource Bucket
+    const getObjectKeyFromInput = new sfn.Pass(this, 'GetObjectKeyFromInput', {
+      parameters: {
+        'RawObjectKey.$':
+          "States.StringSplit($$.Execution.Input.detail.object.key, '.')",
+      },
+      resultPath: '$.getObjectKeyFromInput',
+    });
+    const copyRawObject = new tasks.CallAwsService(this, 'CopyRawObject', {
+      service: 's3',
+      action: 'copyObject',
+      parameters: {
+        'Bucket.$':
+          "States.ArrayGetItem(States.StringSplit($.BucketArn, ':'), 3)",
+        'CopySource.$':
+          "States.Format('{}/{}.{}', $$.Execution.Input.detail.bucket.name, $.getObjectKeyFromInput.RawObjectKey[0], $.getObjectKeyFromInput.RawObjectKey[1])",
+        'Key.$':
+          "States.Format('{}/{}.{}', $.InclusionPrefixes[0], $.getObjectKeyFromInput.RawObjectKey[0], $.getObjectKeyFromInput.RawObjectKey[1])",
+      },
+      iamResources: ['*'],
+    });
+
+    // Step Functions : copy metadata.json to S3DataSource Bucket
+    const copyMetadataJson = new tasks.CallAwsService(
+      this,
+      'CopyMetadataJson',
+      {
         service: 's3',
         action: 'copyObject',
         parameters: {
-          'Bucket.$': "States.ArrayGetItem(States.StringSplit($.BucketArn, ':'), 3)",
-          'CopySource.$': "States.Format('{}/{}.{}', $$.Execution.Input.detail.bucket.name, $.getObjectKeyFromInput.RawObjectKey[0], $.getObjectKeyFromInput.RawObjectKey[1])",
-          'Key.$': "States.Format('{}/{}.{}', $.InclusionPrefixes[0], $.getObjectKeyFromInput.RawObjectKey[0], $.getObjectKeyFromInput.RawObjectKey[1])"
+          'Bucket.$':
+            "States.ArrayGetItem(States.StringSplit($.BucketArn, ':'), 3)",
+          'CopySource.$':
+            "States.Format('{}/{}', $$.Execution.Input.detail.bucket.name, $$.Execution.Input.detail.object.key)",
+          'Key.$':
+            "States.Format('{}/{}', $.InclusionPrefixes[0], $$.Execution.Input.detail.object.key)",
+          ContentType: 'application/json',
         },
-        iamResources: ['*']
-      });
-  
-      // Step Functions : copy metadata.json to S3DataSource Bucket
-      const copyMetadataJson = new tasks.CallAwsService(this, 'CopyMetadataJson', {
-        service: 's3',
-        action: 'copyObject',
-        parameters: {
-          'Bucket.$': "States.ArrayGetItem(States.StringSplit($.BucketArn, ':'), 3)",
-          'CopySource.$': "States.Format('{}/{}', $$.Execution.Input.detail.bucket.name, $$.Execution.Input.detail.object.key)",
-          'Key.$': "States.Format('{}/{}', $.InclusionPrefixes[0], $$.Execution.Input.detail.object.key)",
-          ContentType: "application/json"
-        },
-        iamResources: ['*']
-      });
-  
-      // 並行処理にブランチを追加
-      parallelExecution.branch(
-        getObjectKeyFromInput.next(copyRawObject),
-        copyMetadataJson
-      );
-  
-      // express mode
-      const CopyRawObjectAndMetadataSfn = new sfn.StateMachine(this, 'CopyRawObjectAndMetadataStateMachine', {
-        definition: listDataSources
-          .next(getDataSource)
-          .next(parallelExecution),
+        iamResources: ['*'],
+      }
+    );
+
+    // 並行処理にブランチを追加
+    parallelExecution.branch(
+      getObjectKeyFromInput.next(copyRawObject),
+      copyMetadataJson
+    );
+
+    // express mode
+    const CopyRawObjectAndMetadataSfn = new sfn.StateMachine(
+      this,
+      'CopyRawObjectAndMetadataStateMachine',
+      {
+        definition: listDataSources.next(getDataSource).next(parallelExecution),
         role: copyStepFunctionsRole,
-        stateMachineType: sfn.StateMachineType.EXPRESS
-      });
-      // event bridge rule
-      const createdMetadataJsonRule = new events.Rule(this, 'CreatedMetadataJsonRule', {
+        stateMachineType: sfn.StateMachineType.EXPRESS,
+      }
+    );
+    // event bridge rule
+    const createdMetadataJsonRule = new events.Rule(
+      this,
+      'CreatedMetadataJsonRule',
+      {
         eventPattern: {
           source: ['aws.s3'],
           resources: [sourceBucket.bucketArn],
           detailType: ['Object Created'],
           detail: {
             object: {
-              key: [{
-                suffix: '.metadata.json'
-              }]
-            }
-          }
-        }
-      });
-      createdMetadataJsonRule.addTarget(new targets.SfnStateMachine(CopyRawObjectAndMetadataSfn));
+              key: [
+                {
+                  suffix: '.metadata.json',
+                },
+              ],
+            },
+          },
+        },
+      }
+    );
+    createdMetadataJsonRule.addTarget(
+      new targets.SfnStateMachine(CopyRawObjectAndMetadataSfn)
+    );
 
-      this.copyRawObjectAndMetadataSfn = CopyRawObjectAndMetadataSfn;
-    }
+    this.copyRawObjectAndMetadataSfn = CopyRawObjectAndMetadataSfn;
   }
+}
